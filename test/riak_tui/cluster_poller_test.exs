@@ -1,6 +1,8 @@
 defmodule RiakTui.ClusterPollerTest do
   use ExUnit.Case
 
+  alias Plug.Conn
+
   setup do
     bypass = Bypass.open()
     url = "http://localhost:#{bypass.port}"
@@ -15,8 +17,8 @@ defmodule RiakTui.ClusterPollerTest do
 
     Bypass.stub(bypass, "GET", "/api/cluster/status", fn conn ->
       conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, cluster_payload)
+      |> Conn.put_resp_content_type("application/json")
+      |> Conn.resp(200, cluster_payload)
     end)
 
     # Stub handoff status endpoint
@@ -24,8 +26,8 @@ defmodule RiakTui.ClusterPollerTest do
 
     Bypass.stub(bypass, "GET", "/api/handoff/status", fn conn ->
       conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, handoff_payload)
+      |> Conn.put_resp_content_type("application/json")
+      |> Conn.resp(200, handoff_payload)
     end)
 
     {:ok, bypass: bypass, url: url}
@@ -64,7 +66,7 @@ defmodule RiakTui.ClusterPollerTest do
   describe "poll failure handling" do
     test "sends nil for failed endpoints", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/cluster/status", fn conn ->
-        Plug.Conn.resp(conn, 500, "")
+        Conn.resp(conn, 500, "")
       end)
 
       poller_pid = start_poller!(ctx.url)

@@ -1,6 +1,8 @@
 defmodule RiakTui.DCRegistryTest do
   use ExUnit.Case
 
+  alias Plug.Conn
+
   setup do
     bypass = Bypass.open()
     url = "http://localhost:#{bypass.port}"
@@ -30,8 +32,8 @@ defmodule RiakTui.DCRegistryTest do
     test "auto-selects the local DC on first discovery", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, ctx.dcs_payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, ctx.dcs_payload)
       end)
 
       pid = start_registry!(ctx.url)
@@ -65,8 +67,8 @@ defmodule RiakTui.DCRegistryTest do
 
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, payload)
       end)
 
       pid = start_registry!(ctx.url)
@@ -81,8 +83,8 @@ defmodule RiakTui.DCRegistryTest do
     test "returns all discovered DCs", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, ctx.dcs_payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, ctx.dcs_payload)
       end)
 
       pid = start_registry!(ctx.url)
@@ -99,8 +101,8 @@ defmodule RiakTui.DCRegistryTest do
     test "switches active DC and notifies subscribers", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, ctx.dcs_payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, ctx.dcs_payload)
       end)
 
       pid = start_registry!(ctx.url)
@@ -121,8 +123,8 @@ defmodule RiakTui.DCRegistryTest do
     test "returns error for unknown DC", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, ctx.dcs_payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, ctx.dcs_payload)
       end)
 
       pid = start_registry!(ctx.url)
@@ -135,7 +137,7 @@ defmodule RiakTui.DCRegistryTest do
   describe "discovery failure" do
     test "retries on error without crashing", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
-        Plug.Conn.resp(conn, 500, "")
+        Conn.resp(conn, 500, "")
       end)
 
       pid = start_registry!(ctx.url)
@@ -150,8 +152,8 @@ defmodule RiakTui.DCRegistryTest do
     test "removes subscriber on DOWN", ctx do
       Bypass.stub(ctx.bypass, "GET", "/api/dcs", fn conn ->
         conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, ctx.dcs_payload)
+        |> Conn.put_resp_content_type("application/json")
+        |> Conn.resp(200, ctx.dcs_payload)
       end)
 
       pid = start_registry!(ctx.url)
