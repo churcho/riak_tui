@@ -3,109 +3,144 @@ defmodule RiakTui.ClientTest do
 
   alias RiakTui.Client
 
-  @moduletag :integration
+  @moduletag :unit
 
-  describe "ping/1" do
-    test "returns ok with node name and status" do
-      assert {:ok, %{"node" => node, "status" => "ok"}} = Client.ping()
-      assert is_binary(node)
-      assert node =~ "@"
-    end
+  setup do
+    bypass = Bypass.open()
+    url = "http://127.0.0.1:#{bypass.port}"
+
+    {:ok,
+     %{
+       bypass: bypass,
+       url: url
+     }}
   end
 
-  describe "ring_ownership/1" do
-    test "returns partition list with node assignments" do
-      assert {:ok, %{"num_partitions" => n, "partitions" => parts}} = Client.ring_ownership()
-      assert is_integer(n)
-      assert n > 0
-      assert is_list(parts)
+  describe "ping/1" do
+    test "returns ok with node name and status", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/ping", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{"status" => "ok", "node" => "dev1@127.0.0.1"}))
+      end)
 
-      first = List.first(parts)
-      assert is_map(first)
-      assert Map.has_key?(first, "node")
-      assert Map.has_key?(first, "index")
-    end
-
-    test "includes node_colors mapping" do
-      assert {:ok, %{"node_colors" => colors}} = Client.ring_ownership()
-      assert is_map(colors)
-      assert map_size(colors) > 0
+      assert {:ok, %{"status" => "ok", "node" => "dev1@127.0.0.1"}} = Client.ping(url: url)
     end
   end
 
   describe "cluster_status/1" do
-    test "returns ok or a handled error" do
-      case Client.cluster_status() do
-        {:ok, body} ->
-          assert is_map(body)
+    test "returns cluster membership payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/cluster/status", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"members" => ["dev1", "dev2"], "claimant" => "dev1"})
+        )
+      end)
 
-        {:error, {:http, status, _body}} ->
-          assert is_integer(status)
-
-        {:error, {:transport, reason}} ->
-          assert is_atom(reason)
-      end
+      assert {:ok, %{"members" => members}} = Client.cluster_status(url: url)
+      assert members == ["dev1", "dev2"]
     end
   end
 
   describe "list_dcs/1" do
-    test "returns ok or a handled error" do
-      case Client.list_dcs() do
-        {:ok, %{"dcs" => dcs}} ->
-          assert is_list(dcs)
+    test "returns cluster discovery payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/dcs", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "dcs" => [
+              %{
+                "name" => "dc1",
+                "admin_url" => "http://127.0.0.1:10015",
+                "riak_url" => "http://127.0.0.1:8087",
+                "local" => true
+              }
+            ]
+          })
+        )
+      end)
 
-        {:error, {:http, status, _body}} ->
-          assert is_integer(status)
+      assert {:ok, %{"dcs" => dcs}} = Client.list_dcs(url: url)
+      assert [%{"name" => "dc1"}] = dcs
+    end
+  end
 
-        {:error, {:transport, reason}} ->
-          assert is_atom(reason)
-      end
+  describe "ring_ownership/1" do
+    test "returns ring payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/ring/ownership", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "num_partitions" => 8,
+            "partitions" => [%{"index" => 1, "node" => "dev1@127.0.0.1"}],
+            "node_colors" => %{"dev1@127.0.0.1" => 0}
+          })
+        )
+      end)
+
+      assert {:ok, %{"num_partitions" => 8, "partitions" => partitions}} =
+               Client.ring_ownership(url: url)
+
+      assert [%{"index" => 1, "node" => "dev1@127.0.0.1"}] = partitions
     end
   end
 
   describe "node_stats/2" do
-    test "returns ok or a handled error for a known node" do
-      {:ok, %{"partitions" => [first | _]}} = Client.ring_ownership()
-      node_name = first["node"]
+    test "returns node stats payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/nodes/dev1%40127.0.0.1/stats", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{"status" => "ok"}))
+      end)
 
-      case Client.node_stats(node_name) do
-        {:ok, body} ->
-          assert is_map(body)
-
-        {:error, {:http, status, _body}} ->
-          assert is_integer(status)
-      end
+      assert {:ok, %{"status" => "ok"}} = Client.node_stats("dev1@127.0.0.1", url: url)
     end
   end
 
   describe "handoff_status/1" do
-    test "returns ok or a handled error" do
-      case Client.handoff_status() do
-        {:ok, body} ->
-          assert is_map(body)
+    test "returns handoff payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/handoff/status", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{"active" => 0, "mode" => "standard"}))
+      end)
 
-        {:error, {:http, status, _body}} ->
-          assert is_integer(status)
-      end
+      assert {:ok, %{"mode" => "standard"}} = Client.handoff_status(url: url)
     end
   end
 
   describe "aae_status/1" do
-    test "returns ok or a handled error" do
-      case Client.aae_status() do
-        {:ok, body} ->
-          assert is_map(body)
+    test "returns aae payload", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/aae/status", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{"status" => "ok"}))
+      end)
 
-        {:error, {:http, status, _body}} ->
-          assert is_integer(status)
-      end
+      assert {:ok, %{"status" => "ok"}} = Client.aae_status(url: url)
     end
   end
 
   describe "error handling" do
-    test "returns transport error for unreachable host" do
+    test "returns transport error when host is unreachable" do
       assert {:error, {:transport, :econnrefused}} =
                Client.ping(url: "http://localhost:1")
+    end
+
+    test "returns HTTP error for non-200 response", %{bypass: bypass, url: url} do
+      Bypass.expect_once(bypass, "GET", "/api/ping", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(503, Jason.encode!(%{"error" => "down"}))
+      end)
+
+      assert {:error, {:http, 503, %{"error" => "down"}}} = Client.ping(url: url)
     end
   end
 end

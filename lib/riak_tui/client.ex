@@ -7,8 +7,8 @@ defmodule RiakTui.Client do
   on failure. JSON decoding is handled automatically by Req.
   """
 
-  @default_url Application.compile_env(:riak_tui, :bootstrap_url, "http://127.0.0.1:10015")
-  @timeout Application.compile_env(:riak_tui, :http_timeout, 5_000)
+  @default_url "http://127.0.0.1:10015"
+  @default_timeout 5_000
 
   @type url_opt :: {:url, String.t()}
   @type opts :: [url_opt()]
@@ -59,11 +59,11 @@ defmodule RiakTui.Client do
   # --- Helpers ---
 
   @spec url(opts()) :: String.t()
-  defp url(opts), do: Keyword.get(opts, :url, @default_url)
+  defp url(opts), do: Keyword.get(opts, :url, bootstrap_url())
 
   @spec get(String.t(), String.t()) :: ok_or_error()
   defp get(base_url, path) do
-    case Req.get("#{base_url}#{path}", receive_timeout: @timeout, retry: false) do
+    case Req.get("#{base_url}#{path}", receive_timeout: timeout(), retry: false) do
       {:ok, %Req.Response{status: status, body: body}} when status in 200..299 ->
         {:ok, body}
 
@@ -77,4 +77,33 @@ defmodule RiakTui.Client do
         {:error, reason}
     end
   end
+
+  @spec bootstrap_url() :: String.t()
+  defp bootstrap_url do
+    Application.get_env(:riak_tui, :bootstrap_url, @default_url)
+    |> normalize_url()
+  end
+
+  @spec timeout() :: pos_integer()
+  defp timeout do
+    Application.get_env(:riak_tui, :http_timeout, @default_timeout)
+    |> normalize_timeout()
+  end
+
+  @spec normalize_url(term()) :: String.t()
+  defp normalize_url(url) when is_binary(url) do
+    parsed = URI.parse(String.trim(url))
+
+    if parsed.scheme in ["http", "https"] and is_binary(parsed.host) do
+      String.trim(url)
+    else
+      @default_url
+    end
+  end
+
+  defp normalize_url(_url), do: @default_url
+
+  @spec normalize_timeout(term()) :: pos_integer()
+  defp normalize_timeout(timeout) when is_integer(timeout) and timeout > 0, do: timeout
+  defp normalize_timeout(_timeout), do: @default_timeout
 end

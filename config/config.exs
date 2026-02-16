@@ -16,8 +16,14 @@ config :riak_tui,
   # How long (ms) to wait on a failed DC discovery before retrying.
   dc_retry_interval: 5_000,
 
+  # Set to true to start the terminal UI in the supervision tree.
+  start_ui: false,
+
   # HTTP request timeout (ms) for all Riak Admin API calls.
   http_timeout: 5_000,
+
+  # Render refresh rate for the terminal UI.
+  ui_refresh_ms: 1_000,
 
   # Node color assignments for the ring visualization.
   # Maps node names to color indices.

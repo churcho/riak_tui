@@ -22,3 +22,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 riak_tui-*.tar
 
+# Dialyzer PLTs generated locally.
+/priv/plts/
